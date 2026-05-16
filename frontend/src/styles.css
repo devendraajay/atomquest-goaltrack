@@ -1,0 +1,265 @@
+:root {
+  color: #172033;
+  background: #eef4ff;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px;
+}
+
+.hero {
+  align-items: center;
+  background: linear-gradient(135deg, #0f172a, #1d4ed8);
+  border-radius: 28px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 32px;
+}
+
+.hero h1 {
+  font-size: 44px;
+  letter-spacing: -0.05em;
+  margin: 4px 0;
+}
+
+.hero p {
+  color: #dbeafe;
+  margin: 0;
+  max-width: 700px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.role-switcher {
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  min-width: 280px;
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+}
+
+.grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #dbe5f5;
+  border-radius: 24px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  padding: 22px;
+}
+
+.panel-title {
+  margin-bottom: 16px;
+}
+
+.panel-title h2 {
+  margin: 0;
+}
+
+.panel-title p,
+.hint,
+small {
+  color: #64748b;
+}
+
+.goal-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 14px;
+}
+
+.goal-card.compact {
+  gap: 8px;
+}
+
+.row,
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+input,
+select,
+textarea {
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  color: #172033;
+  font: inherit;
+  min-width: 0;
+  padding: 11px 12px;
+  width: 100%;
+}
+
+textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+button {
+  background: #2563eb;
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 11px 14px;
+}
+
+button.secondary {
+  background: #475569;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.toast {
+  background: #111827;
+  border-radius: 14px;
+  color: white;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+}
+
+.warning {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 14px;
+  color: #92400e;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.cards,
+.metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.team-card,
+.metric {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #172033;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.team-card b,
+.metric strong {
+  color: #1d4ed8;
+  font-size: 28px;
+}
+
+.drawer {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.mini-row,
+.audit-row,
+.approval-editor {
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.approval-editor {
+  display: grid;
+  grid-template-columns: 1fr 100px 150px 90px 150px;
+}
+
+.audit-table {
+  display: grid;
+  gap: 2px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.audit-row {
+  display: grid;
+  grid-template-columns: 180px 160px 1fr 120px;
+}
+
+.chart {
+  height: 260px;
+}
+
+.empty {
+  background: #f1f5f9;
+  border-radius: 16px;
+  color: #64748b;
+  padding: 28px;
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  main {
+    padding: 16px;
+  }
+
+  .hero,
+  .row,
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .grid.two,
+  .cards,
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-editor {
+    grid-template-columns: 1fr;
+  }
+}
