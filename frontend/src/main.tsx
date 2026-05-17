@@ -16,7 +16,7 @@ import "./styles.css";
 
 const configuredApiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const API_URL = configuredApiUrl.startsWith("http") ? configuredApiUrl : `https://${configuredApiUrl}`;
-const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];
+const COLORS = ["#0d9488", "#ea580c", "#2563eb", "#7c3aed", "#059669", "#dc2626"];
 
 type Role = "employee" | "manager" | "admin";
 
@@ -128,30 +128,54 @@ function App() {
   };
 
   return (
-    <main>
-      <header className="hero">
-        <div>
-          <p className="eyebrow">AtomQuest Hackathon 2026</p>
-          <h1>GoalTrack Portal</h1>
-          <p>Digital goal setting, L1 approval, quarterly check-ins, audit trail, and HR analytics in one low-cost portal.</p>
-        </div>
-        <label className="role-switcher">
-          Demo role
+    <div className="app-shell">
+      <header className="site-header">
+        <div className="header-inner">
+          <div className="brand-block">
+            <div className="brand-mark">
+              <span className="brand-icon" aria-hidden="true">◎</span>
+              <p className="eyebrow">AtomQuest Hackathon 2026</p>
+            </div>
+            <h1>GoalTrack Portal</h1>
+            <p className="tagline">
+              Digital goal setting, L1 approval, quarterly check-ins, audit trail, and HR analytics in one portal.
+            </p>
+          </div>
+          <div className="user-card">
+            <span className="user-card-label">Switch demo persona</span>
           <select value={currentEmail} onChange={(event) => setCurrentEmail(event.target.value)}>
-            {users.map((user) => (
-              <option key={user.email} value={user.email}>
-                {user.name} - {user.role}
-              </option>
-            ))}
-          </select>
-        </label>
+              {users.length === 0 && <option value={currentEmail}>Loading users...</option>}
+              {users.map((user) => (
+                <option key={user.email} value={user.email}>
+                  {user.name} · {user.role}
+                </option>
+              ))}
+            </select>
+            {currentUser && (
+              <div className="user-meta">
+                <span className={`role-pill ${currentUser.role}`}>{currentUser.role}</span>
+                <span className="dept-tag">{currentUser.department}</span>
+              </div>
+            )}
+          </div>
+        </div>
       </header>
 
+      <main className="app-main">
+        {!users.length && !message && (
+          <section className="panel">
+            <LoadingState label="Connecting to GoalTrack API..." />
+          </section>
+        )}
+        {currentUser?.role === "employee" && <EmployeePortal api={api} flash={flash} />}
+        {currentUser?.role === "manager" && <ManagerPortal api={api} flash={flash} />}
+        {currentUser?.role === "admin" && <AdminPortal api={api} flash={flash} users={users} />}
+      </main>
+
       {message && <div className="toast">{message}</div>}
-      {currentUser?.role === "employee" && <EmployeePortal api={api} flash={flash} />}
-      {currentUser?.role === "manager" && <ManagerPortal api={api} flash={flash} />}
-      {currentUser?.role === "admin" && <AdminPortal api={api} flash={flash} users={users} />}
-    </main>
+
+      <footer className="site-footer">AtomQuest GoalTrack · Built for AtomQuest Hackathon 2026</footer>
+    </div>
   );
 }
 
@@ -207,15 +231,35 @@ function EmployeePortal({ api, flash }: { api: ApiClient; flash: (text: string) 
     flash("Achievement updated.");
   };
 
-  if (!sheet) return <section className="panel">Loading employee workspace...</section>;
+  if (!sheet) {
+    return (
+      <section className="panel">
+        <LoadingState label="Loading employee workspace..." />
+      </section>
+    );
+  }
+
+  const weightClass =
+    sheet.total_weightage === 100 ? "complete" : sheet.total_weightage > 100 ? "over" : "";
 
   return (
-    <section className="grid two">
+    <section className="grid two content-section">
       <div className="panel">
-        <PanelTitle title="Employee Goal Sheet" subtitle={`Status: ${sheet.status} | Weightage: ${sheet.total_weightage}%`} />
+        <div className="panel-header-row">
+          <PanelTitle title="Employee Goal Sheet" subtitle="Draft, submit, and track your annual objectives" />
+          <StatusBadge status={sheet.status} />
+        </div>
+        <div className="weight-bar" title="Total weightage must equal 100%">
+          <div className={`weight-bar-fill ${weightClass}`} style={{ width: `${Math.min(sheet.total_weightage, 100)}%` }} />
+        </div>
+        <p className="hint" style={{ marginTop: 8 }}>
+          Total weightage: <strong>{sheet.total_weightage}%</strong>
+          {sheet.total_weightage !== 100 && " (must be 100% to submit)"}
+        </p>
         {sheet.returned_reason && <div className="warning">{sheet.returned_reason}</div>}
         {goals.map((goal, index) => (
           <div className="goal-card" key={goal.id || index}>
+            <span className="goal-index">{index + 1}</span>
             <div className="row">
               <input disabled={sheet.locked || goal.read_only_shared_fields} value={goal.title} placeholder="Goal title" onChange={(event) => updateGoal(index, { title: event.target.value })} />
               <input type="number" value={goal.weightage} onChange={(event) => updateGoal(index, { weightage: Number(event.target.value) })} />
@@ -249,9 +293,15 @@ function EmployeePortal({ api, flash }: { api: ApiClient; flash: (text: string) 
           </div>
         ))}
         <div className="actions">
-          <button disabled={sheet.locked || goals.length >= 8} onClick={() => setGoals([...goals, blankGoal()])}>Add Goal</button>
-          <button disabled={sheet.locked} onClick={saveGoals}>Save Draft</button>
-          <button disabled={sheet.locked || sheet.total_weightage !== 100} onClick={submit}>Submit for Approval</button>
+          <button className="ghost" disabled={sheet.locked || goals.length >= 8} onClick={() => setGoals([...goals, blankGoal()])}>
+            + Add Goal
+          </button>
+          <button className="secondary" disabled={sheet.locked} onClick={saveGoals}>
+            Save Draft
+          </button>
+          <button disabled={sheet.locked || sheet.total_weightage !== 100} onClick={submit}>
+            Submit for Approval
+          </button>
         </div>
       </div>
 
@@ -346,13 +396,16 @@ function ManagerPortal({ api, flash }: { api: ApiClient; flash: (text: string) =
   };
 
   return (
-    <section className="grid two">
+    <section className="grid two content-section">
       <div className="panel">
         <PanelTitle title="L1 Approval Queue" subtitle={`${approvals.length} submitted sheets awaiting action`} />
         {approvals.map((sheet) => (
           <div className="goal-card" key={sheet.id}>
-            <strong>{sheet.employee.name}</strong>
-            <span>{sheet.total_weightage}% total weightage | {sheet.goals.length} goals</span>
+            <div className="panel-header-row">
+              <strong>{sheet.employee.name}</strong>
+              <StatusBadge status={sheet.status} />
+            </div>
+            <span>{sheet.total_weightage}% weightage · {sheet.goals.length} goals</span>
             {sheet.goals.map((goal) => <ApprovalGoalEditor key={goal.id} api={api} goal={goal} onSaved={load} />)}
             <div className="actions">
               <button onClick={() => approve(sheet)}>Approve and Lock</button>
@@ -455,10 +508,16 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
     load();
   };
 
-  if (!analytics) return <section className="panel">Loading admin dashboard...</section>;
+  if (!analytics) {
+    return (
+      <section className="panel">
+        <LoadingState label="Loading admin dashboard..." />
+      </section>
+    );
+  }
 
   return (
-    <section className="grid two">
+    <section className="grid two content-section">
       <div className="panel">
         <PanelTitle title="HR Completion Dashboard" subtitle={`Active quarter: ${analytics.active_quarter}`} />
         <div className="metrics">
@@ -477,7 +536,9 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <button onClick={downloadCsv}>Download Achievement CSV</button>
+        <button className="secondary" onClick={downloadCsv}>
+          ↓ Download Achievement CSV
+        </button>
       </div>
 
       <div className="panel">
@@ -549,6 +610,23 @@ function Metric({ label, value }: { label: string; value: number }) {
 
 function EmptyState({ text }: { text: string }) {
   return <div className="empty">{text}</div>;
+}
+
+function LoadingState({ label }: { label: string }) {
+  return (
+    <div className="loading-panel">
+      <div className="spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const normalized = status.toLowerCase().replace(/\s+/g, "_");
+  const variant = ["draft", "submitted", "approved", "returned"].includes(normalized)
+    ? normalized
+    : "draft";
+  return <span className={`status-badge ${variant}`}>{status.replace(/_/g, " ")}</span>;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
