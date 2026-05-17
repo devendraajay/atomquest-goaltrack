@@ -407,13 +407,15 @@ function ManagerPortal({ api, flash }: { api: ApiClient; flash: (text: string) =
       <div className="panel panel-accent-orange">
         <PanelTitle icon="✅" iconTone="orange" title="L1 Approval Queue" subtitle={`${approvals.length} submitted sheets awaiting action`} />
         {approvals.map((sheet) => (
-          <div className="goal-card" key={sheet.id}>
+          <div className="goal-card approval-sheet-card" key={sheet.id}>
             <div className="panel-header-row">
               <strong>{sheet.employee.name}</strong>
               <StatusBadge status={sheet.status} />
             </div>
             <span>{sheet.total_weightage}% weightage · {sheet.goals.length} goals</span>
-            {sheet.goals.map((goal) => <ApprovalGoalEditor key={goal.id} api={api} goal={goal} onSaved={load} />)}
+            {sheet.goals.map((goal) => (
+              <ApprovalGoalEditor key={goal.id} api={api} goal={goal} onSaved={load} />
+            ))}
             <div className="actions">
               <button onClick={() => approve(sheet)}>Approve and Lock</button>
               <button className="secondary" onClick={() => returnSheet(sheet)}>Return</button>
@@ -490,11 +492,26 @@ function ApprovalGoalEditor({ api, goal, onSaved }: { api: ApiClient; goal: Goal
 
   return (
     <div className="approval-editor">
-      <span>{goal.title}</span>
-      <input value={target} onChange={(event) => setTarget(event.target.value)} placeholder="Target" />
-      <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
-      <input type="number" value={weightage} onChange={(event) => setWeightage(event.target.value)} />
-      <button className="secondary" onClick={save}>Save Inline Edit</button>
+      <span className="approval-editor-title">{goal.title}</span>
+      <div className="approval-editor-fields">
+        <div className="approval-field">
+          <label htmlFor={`target-${goal.id}`}>Target</label>
+          <input id={`target-${goal.id}`} value={target} onChange={(event) => setTarget(event.target.value)} placeholder="Target" />
+        </div>
+        <div className="approval-field">
+          <label htmlFor={`deadline-${goal.id}`}>Deadline</label>
+          <input id={`deadline-${goal.id}`} type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+        </div>
+        <div className="approval-field">
+          <label htmlFor={`weight-${goal.id}`}>Weight %</label>
+          <input id={`weight-${goal.id}`} type="number" value={weightage} onChange={(event) => setWeightage(event.target.value)} />
+        </div>
+      </div>
+      <div className="approval-editor-actions">
+        <button type="button" className="secondary" onClick={save}>
+          Save edit
+        </button>
+      </div>
     </div>
   );
 }

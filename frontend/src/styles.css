@@ -419,6 +419,11 @@ body {
 
 .grid.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.grid.two > .panel {
+  min-width: 0;
 }
 
 .wide {
@@ -436,6 +441,7 @@ body {
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
   position: relative;
   overflow: hidden;
+  min-width: 0;
 }
 
 .panel::before {
@@ -600,7 +606,7 @@ small {
 .goal-card:hover {
   border-color: rgba(99, 102, 241, 0.35);
   box-shadow: 0 8px 24px rgba(99, 102, 241, 0.1);
-  transform: translateX(4px);
+  transform: translateY(-2px);
 }
 
 .goal-card:hover::after {
@@ -963,14 +969,62 @@ textarea:disabled {
 
 .approval-editor {
   display: grid;
-  grid-template-columns: 1fr 100px 150px 90px auto;
-  gap: 10px;
+  gap: 12px;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 12px;
   margin-bottom: 10px;
   padding: 14px;
-  align-items: center;
+}
+
+.approval-editor-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.approval-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.approval-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.approval-field label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.approval-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.approval-editor-actions button {
+  width: 100%;
+  max-width: 200px;
+}
+
+.approval-sheet-card {
+  overflow: hidden;
+}
+
+.approval-sheet-card .panel-header-row {
+  margin-bottom: 4px;
+}
+
+.approval-sheet-card .actions {
+  flex-wrap: wrap;
 }
 
 .audit-table {
@@ -1142,6 +1196,20 @@ textarea:disabled {
   font-size: 1.1rem;
 }
 
+@media (max-width: 1100px) {
+  .grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-editor-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .approval-editor-actions button {
+    max-width: none;
+  }
+}
+
 @media (max-width: 900px) {
   .header-inner {
     padding: 28px 22px 32px;
@@ -1161,7 +1229,10 @@ textarea:disabled {
     grid-template-columns: 1fr;
   }
 
-  .approval-editor,
+  .approval-editor-fields {
+    grid-template-columns: 1fr;
+  }
+
   .audit-row,
   .audit-table-header {
     grid-template-columns: 1fr;
