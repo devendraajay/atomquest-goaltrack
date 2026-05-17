@@ -1,7 +1,7 @@
 services:
   - type: web
     name: atomquest-goaltrack-api
-    env: docker
+    runtime: docker
     plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile
@@ -14,8 +14,10 @@ services:
           name: atomquest-goaltrack-db
           property: connectionString
 
-  - type: static
+  - type: web
     name: atomquest-goaltrack-portal
+    runtime: static
+    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -25,6 +27,12 @@ services:
           type: web
           name: atomquest-goaltrack-api
           property: host
+      - key: NODE_VERSION
+        value: "22"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
 
 databases:
   - name: atomquest-goaltrack-db

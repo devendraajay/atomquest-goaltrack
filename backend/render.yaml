@@ -1,7 +1,7 @@
 services:
   - type: web
     name: atomquest-goaltrack-api
-    env: docker
+    runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
