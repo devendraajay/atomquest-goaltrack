@@ -505,7 +505,7 @@ app = FastAPI(title="AtomQuest GoalTrack API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",")],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
