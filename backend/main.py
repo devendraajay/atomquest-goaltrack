@@ -2,7 +2,7 @@ import csv
 import io
 import json
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Optional
 
@@ -195,6 +195,43 @@ class AuditLog(Base):
     actor: Mapped[User] = relationship()
 
 
+class NotificationLog(Base):
+    __tablename__ = "notification_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    channel: Mapped[str] = mapped_column(String(20))
+    event_type: Mapped[str] = mapped_column(String(80))
+    recipient_email: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    deep_link: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EscalationLog(Base):
+    __tablename__ = "escalation_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    rule_code: Mapped[str] = mapped_column(String(80))
+    severity: Mapped[str] = mapped_column(String(20))
+    subject_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    escalated_to_role: Mapped[str] = mapped_column(String(30))
+    message: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    subject_user: Mapped[User] = relationship()
+
+
+PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://atomquest-goaltrack-portal.onrender.com")
+ENTRA_GROUP_ROLE_MAP = {
+    "GoalTrack-Admins": Role.admin.value,
+    "GoalTrack-Managers": Role.manager.value,
+    "GoalTrack-Employees": Role.employee.value,
+}
+
+
 class GoalIn(BaseModel):
     id: Optional[int] = None
     thrust_area: str
@@ -251,6 +288,10 @@ class SharedGoalIn(BaseModel):
 
 class UnlockIn(BaseModel):
     reason: str
+
+
+class EntraSsoIn(BaseModel):
+    email: str
 
 
 def db_session():
@@ -317,6 +358,242 @@ def audit(db: Session, actor: User, entity_type: str, entity_id: int, action: st
             after_json=json.dumps(after, default=str),
         )
     )
+
+
+def portal_deep_link(email: str, sheet_id: Optional[int] = None) -> str:
+    link = f"{PORTAL_BASE_URL}/?email={email}"
+    if sheet_id is not None:
+        link += f"&sheet={sheet_id}"
+    return link
+
+
+def entra_groups_for_user(user: User) -> list[str]:
+    if user.role == Role.admin.value:
+        return ["GoalTrack-Admins", "All-Staff"]
+    if user.role == Role.manager.value:
+        return ["GoalTrack-Managers", "All-Staff"]
+    return ["GoalTrack-Employees", "All-Staff"]
+
+
+def queue_notification(
+    db: Session,
+    *,
+    channel: str,
+    event_type: str,
+    recipient: User,
+    subject: str,
+    body: str,
+    sheet_id: Optional[int] = None,
+) -> None:
+    db.add(
+        NotificationLog(
+            channel=channel,
+            event_type=event_type,
+            recipient_email=recipient.email,
+            subject=subject,
+            body=body,
+            deep_link=portal_deep_link(recipient.email, sheet_id),
+            status="queued",
+        )
+    )
+
+
+def notify_workflow_event(db: Session, event_type: str, sheet: GoalSheet, actor: User) -> None:
+    employee = sheet.employee
+    manager = employee.manager
+    if event_type == "goal_submitted" and manager:
+        queue_notification(
+            db,
+            channel="email",
+            event_type=event_type,
+            recipient=manager,
+            subject=f"Goal sheet submitted by {employee.name}",
+            body=f"{employee.name} submitted a goal sheet for approval.",
+            sheet_id=sheet.id,
+        )
+        queue_notification(
+            db,
+            channel="teams",
+            event_type=event_type,
+            recipient=manager,
+            subject=f"Teams: {employee.name} submitted goals",
+            body=f"Adaptive card: review {employee.name}'s goal sheet in GoalTrack.",
+            sheet_id=sheet.id,
+        )
+    elif event_type == "goal_approved":
+        queue_notification(
+            db,
+            channel="email",
+            event_type=event_type,
+            recipient=employee,
+            subject="Your goal sheet was approved",
+            body=f"{actor.name} approved and locked your goal sheet.",
+            sheet_id=sheet.id,
+        )
+    elif event_type == "goal_returned":
+        queue_notification(
+            db,
+            channel="email",
+            event_type=event_type,
+            recipient=employee,
+            subject="Goal sheet returned for rework",
+            body=sheet.returned_reason or "Please update your goals and resubmit.",
+            sheet_id=sheet.id,
+        )
+    elif event_type == "checkin_completed":
+        queue_notification(
+            db,
+            channel="teams",
+            event_type=event_type,
+            recipient=employee,
+            subject=f"Check-in completed by {actor.name}",
+            body="Your manager recorded a quarterly check-in comment.",
+            sheet_id=sheet.id,
+        )
+
+
+def cycle_created_at(_db: Session, _cycle: Cycle) -> datetime:
+    return datetime.utcnow() - timedelta(days=10)
+
+
+def run_escalation_scan(db: Session) -> list[EscalationLog]:
+    created: list[EscalationLog] = []
+    cycle = active_cycle(db)
+    now = datetime.utcnow()
+    sheets = db.query(GoalSheet).filter(GoalSheet.cycle_id == cycle.id).all()
+
+    def add_escalation(rule_code: str, user: User, role: str, message: str, severity: str = "medium") -> None:
+        exists = (
+            db.query(EscalationLog)
+            .filter(EscalationLog.rule_code == rule_code, EscalationLog.subject_user_id == user.id, EscalationLog.status == "open")
+            .first()
+        )
+        if exists:
+            return
+        row = EscalationLog(
+            rule_code=rule_code,
+            severity=severity,
+            subject_user_id=user.id,
+            escalated_to_role=role,
+            message=message,
+            status="open",
+        )
+        db.add(row)
+        created.append(row)
+        hr = db.query(User).filter(User.role == Role.admin.value).first()
+        if hr:
+            queue_notification(db, channel="email", event_type="escalation", recipient=hr, subject=f"Escalation: {rule_code}", body=message)
+
+    for sheet in sheets:
+        employee = sheet.employee
+        manager = employee.manager
+        if sheet.status == SheetStatus.draft.value and (now - cycle_created_at(db, cycle)) > timedelta(days=7):
+            add_escalation(
+                "employee_goal_not_submitted",
+                employee,
+                Role.manager.value,
+                f"{employee.name} has not submitted goals within 7 days of cycle open.",
+                "high",
+            )
+        if sheet.status == SheetStatus.submitted.value and sheet.submitted_at and (now - sheet.submitted_at) > timedelta(days=5):
+            if manager:
+                add_escalation(
+                    "manager_approval_overdue",
+                    manager,
+                    Role.admin.value,
+                    f"{manager.name} has not approved {employee.name}'s sheet within 5 days of submission.",
+                    "high",
+                )
+        if sheet.status == SheetStatus.approved.value:
+            active_q = cycle.active_quarter
+            has_checkin = db.query(CheckIn).filter(CheckIn.sheet_id == sheet.id, CheckIn.quarter == active_q).first()
+            if not has_checkin and sheet.approved_at and (now - sheet.approved_at) > timedelta(days=14):
+                if manager:
+                    add_escalation(
+                        "checkin_not_completed",
+                        manager,
+                        Role.admin.value,
+                        f"{active_q} check-in pending for {employee.name}.",
+                        "medium",
+                    )
+    db.flush()
+    return created
+
+
+def build_org_hierarchy(db: Session) -> list[dict[str, Any]]:
+    users = db.query(User).all()
+    nodes: dict[int, dict[str, Any]] = {}
+    for user in users:
+        nodes[user.id] = {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "department": user.department,
+            "manager_id": user.manager_id,
+            "entra_groups": entra_groups_for_user(user),
+            "reports": [],
+        }
+    roots: list[dict[str, Any]] = []
+    for user in users:
+        node = nodes[user.id]
+        if user.manager_id and user.manager_id in nodes:
+            nodes[user.manager_id]["reports"].append(node)
+        else:
+            roots.append(node)
+    return roots
+
+
+def advanced_analytics(db: Session) -> dict[str, Any]:
+    employees = db.query(User).filter(User.role == Role.employee.value).all()
+    goals = db.query(Goal).all()
+    quarters = ["Q1", "Q2", "Q3", "Q4"]
+    qoq_trends: list[dict[str, Any]] = []
+    for quarter in quarters:
+        scores = [
+            progress_score(goal, achievement)
+            for goal in goals
+            for achievement in goal.achievements
+            if achievement.quarter == quarter
+        ]
+        qoq_trends.append(
+            {
+                "quarter": quarter,
+                "avg_progress": round(sum(scores) / len(scores), 1) if scores else 0,
+                "goals_tracked": len(scores),
+            }
+        )
+
+    department_heatmap: list[dict[str, Any]] = []
+    departments = sorted({employee.department for employee in employees})
+    for department in departments:
+        dept_employees = [employee for employee in employees if employee.department == department]
+        approved = submitted = 0
+        for employee in dept_employees:
+            sheet = sheet_for_employee(db, employee.id)
+            if sheet.status == SheetStatus.approved.value:
+                approved += 1
+            if sheet.status == SheetStatus.submitted.value:
+                submitted += 1
+        total = len(dept_employees) or 1
+        department_heatmap.append(
+            {
+                "department": department,
+                "approved_rate": round(approved / total * 100, 1),
+                "submitted_rate": round(submitted / total * 100, 1),
+                "headcount": len(dept_employees),
+            }
+        )
+
+    uom_counts: dict[str, int] = {}
+    for goal in goals:
+        uom_counts[goal.uom_type] = uom_counts.get(goal.uom_type, 0) + 1
+
+    return {
+        "qoq_trends": qoq_trends,
+        "department_heatmap": department_heatmap,
+        "uom_distribution": [{"name": key, "value": value} for key, value in uom_counts.items()],
+    }
 
 
 def validate_goal_payload(goals: list[GoalIn], require_total: bool = False) -> None:
@@ -493,12 +770,34 @@ def ensure_seed_data(db: Session) -> None:
             ),
         ]
         db.add_all(base_goals)
+        db.flush()
+        for goal in base_goals:
+            db.add(
+                Achievement(
+                    goal_id=goal.id,
+                    quarter="Q4",
+                    actual_value=(goal.target_value or 0) * 0.85 if goal.target_value else None,
+                    status=ProgressStatus.on_track.value,
+                    comment="Prior quarter baseline",
+                    updated_by_id=employee.id,
+                )
+            )
+    kabir = db.query(User).filter(User.email == "kabir@atomberg.demo").first()
+    if kabir:
+        kabir_sheet = sheet_for_employee(db, kabir.id)
+        kabir_sheet.status = SheetStatus.submitted.value
+        kabir_sheet.submitted_at = datetime.utcnow() - timedelta(days=6)
+    db.commit()
+    run_escalation_scan(db)
     db.commit()
 
 
 Base.metadata.create_all(bind=engine)
 with SessionLocal() as seed_db:
     ensure_seed_data(seed_db)
+    if seed_db.query(User).first() and not seed_db.query(EscalationLog).first():
+        run_escalation_scan(seed_db)
+        seed_db.commit()
 
 
 app = FastAPI(title="AtomQuest GoalTrack API", version="1.0.0")
@@ -655,6 +954,8 @@ def submit_sheet(
     sheet.submitted_at = datetime.utcnow()
     sheet.returned_reason = None
     audit(db, user, "goal_sheet", sheet.id, "submitted_for_approval", before, {"status": sheet.status})
+    db.refresh(sheet)
+    notify_workflow_event(db, "goal_submitted", sheet, user)
     db.commit()
     return serialize_sheet(sheet)
 
@@ -761,6 +1062,8 @@ def approve_sheet(
     sheet.locked = True
     sheet.approved_at = datetime.utcnow()
     audit(db, user, "goal_sheet", sheet.id, "manager_approved", before, {"status": sheet.status, "locked": sheet.locked})
+    db.refresh(sheet)
+    notify_workflow_event(db, "goal_approved", sheet, user)
     db.commit()
     return serialize_sheet(sheet)
 
@@ -779,6 +1082,8 @@ def return_sheet(
     sheet.status = SheetStatus.returned.value
     sheet.returned_reason = payload.reason
     audit(db, user, "goal_sheet", sheet.id, "returned_for_rework", before, {"status": sheet.status, "reason": payload.reason})
+    db.refresh(sheet)
+    notify_workflow_event(db, "goal_returned", sheet, user)
     db.commit()
     return serialize_sheet(sheet)
 
@@ -852,6 +1157,8 @@ def save_checkin(
         checkin.comment = payload.comment
         checkin.completed_at = datetime.utcnow()
     audit(db, user, "checkin", sheet_id, "manager_checkin_completed", before, {"quarter": payload.quarter, "comment": payload.comment})
+    db.refresh(sheet)
+    notify_workflow_event(db, "checkin_completed", sheet, user)
     db.commit()
     return serialize_sheet(sheet, payload.quarter)
 
@@ -940,7 +1247,108 @@ def analytics_summary(
         "goal_status_distribution": [{"name": key, "value": value} for key, value in status_counts.items()],
         "thrust_area_distribution": [{"name": key, "value": value} for key, value in thrust_counts.items()],
         "manager_completion": manager_completion,
+        **advanced_analytics(db),
     }
+
+
+@app.get("/auth/entra/status")
+def entra_status() -> dict[str, Any]:
+    return {
+        "enabled": os.getenv("ENTRA_ENABLED", "demo").lower() != "false",
+        "tenant": os.getenv("ENTRA_TENANT_ID", "atomberg-demo.onmicrosoft.com"),
+        "sso_protocol": "OpenID Connect / OAuth2",
+        "group_role_mapping": ENTRA_GROUP_ROLE_MAP,
+        "note": "Demo mode simulates Entra SSO; production uses Microsoft Graph for hierarchy sync.",
+    }
+
+
+@app.post("/auth/entra/sso")
+def entra_sso(payload: EntraSsoIn, db: Session = Depends(db_session)) -> dict[str, Any]:
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not provisioned from Entra ID")
+    groups = entra_groups_for_user(user)
+    mapped_role = ENTRA_GROUP_ROLE_MAP.get(next((group for group in groups if group in ENTRA_GROUP_ROLE_MAP), ""), user.role)
+    manager = user.manager
+    return {
+        "user": {"id": user.id, "name": user.name, "email": user.email, "role": user.role, "department": user.department},
+        "entra": {
+            "oid": f"demo-{user.id}",
+            "groups": groups,
+            "mapped_role": mapped_role,
+            "manager_email": manager.email if manager else None,
+            "deep_link": portal_deep_link(user.email),
+        },
+    }
+
+
+@app.get("/org/hierarchy")
+def org_hierarchy(
+    db: Session = Depends(db_session),
+    _: User = Depends(require_role(Role.admin, Role.manager)),
+) -> dict[str, Any]:
+    return {"source": "Microsoft Entra ID (demo sync)", "roots": build_org_hierarchy(db)}
+
+
+@app.get("/admin/notifications")
+def list_notifications(
+    db: Session = Depends(db_session),
+    _: User = Depends(require_role(Role.admin)),
+) -> list[dict[str, Any]]:
+    rows = db.query(NotificationLog).order_by(NotificationLog.created_at.desc()).limit(50).all()
+    return [
+        {
+            "id": row.id,
+            "channel": row.channel,
+            "event_type": row.event_type,
+            "recipient_email": row.recipient_email,
+            "subject": row.subject,
+            "body": row.body,
+            "deep_link": row.deep_link,
+            "status": row.status,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
+
+
+@app.get("/admin/escalations")
+def list_escalations(
+    db: Session = Depends(db_session),
+    _: User = Depends(require_role(Role.admin)),
+) -> list[dict[str, Any]]:
+    rows = db.query(EscalationLog).order_by(EscalationLog.created_at.desc()).limit(50).all()
+    return [
+        {
+            "id": row.id,
+            "rule_code": row.rule_code,
+            "severity": row.severity,
+            "subject_user": row.subject_user.name,
+            "escalated_to_role": row.escalated_to_role,
+            "message": row.message,
+            "status": row.status,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
+
+
+@app.post("/admin/escalations/run")
+def trigger_escalations(
+    db: Session = Depends(db_session),
+    _: User = Depends(require_role(Role.admin)),
+) -> dict[str, Any]:
+    created = run_escalation_scan(db)
+    db.commit()
+    return {"created": len(created), "message": "Escalation scan completed"}
+
+
+@app.get("/analytics/advanced")
+def analytics_advanced(
+    db: Session = Depends(db_session),
+    _: User = Depends(require_role(Role.admin, Role.manager)),
+) -> dict[str, Any]:
+    return advanced_analytics(db)
 
 
 @app.get("/admin/dashboard")

@@ -20,6 +20,13 @@
 - Manager: `manager@atomberg.demo`
 - Admin: `admin@atomberg.demo`
 
+## Bonus Features (Demo / MVP)
+
+- Microsoft Entra ID: `POST /auth/entra/sso`, `GET /auth/entra/status`, `GET /org/hierarchy`
+- Email & Teams: notification queue at `GET /admin/notifications` (deep links on each row)
+- Escalations: `GET /admin/escalations`, `POST /admin/escalations/run`
+- Advanced analytics: QoQ trends, department heatmap, UoM chart on admin dashboard
+
 ## Submission Assets
 
 - Live portal URL

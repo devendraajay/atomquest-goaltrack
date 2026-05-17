@@ -71,6 +71,32 @@ type Analytics = {
   goal_status_distribution: Array<{ name: string; value: number }>;
   thrust_area_distribution: Array<{ name: string; value: number }>;
   manager_completion: Array<{ manager: string; team_size: number; completed_checkins: number }>;
+  qoq_trends?: Array<{ quarter: string; avg_progress: number; goals_tracked: number }>;
+  department_heatmap?: Array<{ department: string; approved_rate: number; submitted_rate: number; headcount: number }>;
+  uom_distribution?: Array<{ name: string; value: number }>;
+};
+
+type NotificationRow = {
+  id: number;
+  channel: string;
+  event_type: string;
+  recipient_email: string;
+  subject: string;
+  body: string;
+  deep_link: string;
+  status: string;
+  created_at: string;
+};
+
+type EscalationRow = {
+  id: number;
+  rule_code: string;
+  severity: string;
+  subject_user: string;
+  escalated_to_role: string;
+  message: string;
+  status: string;
+  created_at: string;
 };
 
 type ApiClient = {
@@ -116,6 +142,9 @@ function App() {
   );
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get("email");
+    if (email) setCurrentEmail(email);
     fetch(`${API_URL}/auth/demo-users`)
       .then((response) => response.json())
       .then(setUsers)
@@ -145,11 +174,32 @@ function App() {
               <span className="feature-pill">✓ L1 approvals</span>
               <span className="feature-pill">◐ Quarterly tracking</span>
               <span className="feature-pill">▣ HR analytics</span>
+              <span className="feature-pill">🔐 Entra SSO</span>
+              <span className="feature-pill">📧 Teams alerts</span>
             </div>
           </div>
           <div className="user-card">
             <span className="user-card-label">Switch demo persona</span>
-          <select value={currentEmail} onChange={(event) => setCurrentEmail(event.target.value)}>
+            <button
+              type="button"
+              className="entra-btn"
+              onClick={() => {
+                fetch(`${API_URL}/auth/entra/sso`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email: currentEmail }),
+                })
+                  .then((response) => response.json())
+                  .then((data) => {
+                    setCurrentEmail(data.user.email);
+                    flash(`Signed in via Microsoft Entra (${data.entra.groups.join(", ")})`);
+                  })
+                  .catch((error) => flash(error.message));
+              }}
+            >
+              Sign in with Microsoft
+            </button>
+            <select value={currentEmail} onChange={(event) => setCurrentEmail(event.target.value)}>
               {users.length === 0 && <option value={currentEmail}>Loading users...</option>}
               {users.map((user) => (
                 <option key={user.email} value={user.email}>
@@ -520,11 +570,15 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [audit, setAudit] = useState<any[]>([]);
   const [sheets, setSheets] = useState<Sheet[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [escalations, setEscalations] = useState<EscalationRow[]>([]);
 
   const load = () => {
     api.request<Analytics>("/admin/dashboard").then(setAnalytics).catch((error: Error) => flash(error.message));
     api.request<any[]>("/admin/audit").then(setAudit).catch((error: Error) => flash(error.message));
     api.request<Sheet[]>("/admin/sheets?quarter=Q1").then(setSheets).catch((error: Error) => flash(error.message));
+    api.request<NotificationRow[]>("/admin/notifications").then(setNotifications).catch(() => setNotifications([]));
+    api.request<EscalationRow[]>("/admin/escalations").then(setEscalations).catch(() => setEscalations([]));
   };
   useEffect(load, []);
 
@@ -607,6 +661,100 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
             <b>{item.completed_checkins}/{item.team_size} check-ins</b>
           </div>
         ))}
+        {analytics.qoq_trends && analytics.qoq_trends.length > 0 && (
+          <div className="chart-wrap">
+            <p className="hint" style={{ marginBottom: 8 }}>Quarter-on-quarter achievement trend</p>
+            <div className="chart chart-short">
+              <ResponsiveContainer>
+                <BarChart data={analytics.qoq_trends}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="quarter" tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="avg_progress" fill="#8b5cf6" radius={[8, 8, 0, 0]} name="Avg progress %" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+        {analytics.uom_distribution && analytics.uom_distribution.length > 0 && (
+          <div className="chart-wrap">
+            <p className="hint" style={{ marginBottom: 8 }}>Goal distribution by UoM type</p>
+            <div className="chart chart-short">
+              <ResponsiveContainer>
+                <BarChart data={analytics.uom_distribution}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#14b8a6" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {analytics.department_heatmap && analytics.department_heatmap.length > 0 && (
+        <div className="panel wide panel-accent-indigo">
+          <PanelTitle icon="🗺" iconTone="indigo" title="Department completion heatmap" subtitle="Approved vs submitted rates by department" />
+          <div className="heatmap-grid">
+            {analytics.department_heatmap.map((row) => (
+              <div className="heatmap-cell" key={row.department}>
+                <strong>{row.department}</strong>
+                <span>{row.headcount} employees</span>
+                <div className="heatmap-bar">
+                  <div className="heatmap-fill approved" style={{ width: `${row.approved_rate}%` }} />
+                  <div className="heatmap-fill submitted" style={{ width: `${row.submitted_rate}%` }} />
+                </div>
+                <small>Approved {row.approved_rate}% · Submitted {row.submitted_rate}%</small>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="panel wide">
+        <PanelTitle icon="📧" iconTone="teal" title="Email & Teams notifications" subtitle="Queued alerts with deep links to goal sheets" />
+        <div className="integration-list">
+          {notifications.slice(0, 8).map((row) => (
+            <div className="integration-row" key={row.id}>
+              <span className={`channel-badge ${row.channel}`}>{row.channel}</span>
+              <div>
+                <strong>{row.subject}</strong>
+                <p>{row.body}</p>
+                <a href={row.deep_link} target="_blank" rel="noreferrer">
+                  Open in portal →
+                </a>
+              </div>
+            </div>
+          ))}
+          {!notifications.length && <EmptyState icon="📭" text="Notifications appear when goals are submitted, approved, or returned." />}
+        </div>
+      </div>
+
+      <div className="panel wide">
+        <PanelTitle icon="⚡" iconTone="orange" title="Escalation module" subtitle="Rule-based escalations for overdue submissions, approvals, and check-ins" />
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => api.request("/admin/escalations/run", { method: "POST" }).then(() => { flash("Escalation scan completed."); load(); })}
+        >
+          Run escalation scan
+        </button>
+        <div className="integration-list">
+          {escalations.map((row) => (
+            <div className="integration-row" key={row.id}>
+              <span className={`severity-badge ${row.severity}`}>{row.severity}</span>
+              <div>
+                <strong>{row.rule_code.replace(/_/g, " ")}</strong>
+                <p>{row.message}</p>
+                <small>Escalated to {row.escalated_to_role} · {row.subject_user}</small>
+              </div>
+            </div>
+          ))}
+          {!escalations.length && <EmptyState icon="⚡" text="No open escalations. Run scan after fresh deploy." />}
+        </div>
       </div>
 
       <div className="panel wide panel-accent-orange">
@@ -708,13 +856,11 @@ function QuarterTabs({ value, onChange }: { value: string; onChange: (q: string)
 
 function Avatar({ name }: { name: string }) {
   const initials = name
-    .trim()
-    .split(/\s+/)
-    .filter((part) => part.length > 0)
+    .split(" ")
     .map((part) => part[0])
     .join("")
     .slice(0, 2)
-    .toUpperCase() || "?";
+    .toUpperCase();
   return <span className="avatar">{initials}</span>;
 }
 

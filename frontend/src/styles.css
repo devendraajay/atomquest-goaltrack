@@ -1196,6 +1196,129 @@ textarea:disabled {
   font-size: 1.1rem;
 }
 
+.entra-btn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  color: #1f2937;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 14px;
+  width: 100%;
+  box-shadow: var(--shadow-sm);
+}
+
+.entra-btn:hover {
+  background: #f8fafc;
+  border-color: #2563eb;
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
+.chart-short {
+  height: 220px;
+}
+
+.heatmap-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.heatmap-cell {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.heatmap-cell strong {
+  font-size: 15px;
+}
+
+.heatmap-cell span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.heatmap-bar {
+  background: #e2e8f0;
+  border-radius: 999px;
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+}
+
+.heatmap-fill.approved {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.heatmap-fill.submitted {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.integration-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.integration-row {
+  align-items: flex-start;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+}
+
+.integration-row p {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.integration-row a {
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.channel-badge,
+.severity-badge {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 10px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.channel-badge.email {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.channel-badge.teams {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.severity-badge.high {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.severity-badge.medium {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 @media (max-width: 1100px) {
   .grid.two {
     grid-template-columns: 1fr;
