@@ -16,7 +16,7 @@ import "./styles.css";
 
 const configuredApiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const API_URL = configuredApiUrl.startsWith("http") ? configuredApiUrl : `https://${configuredApiUrl}`;
-const COLORS = ["#0d9488", "#ea580c", "#2563eb", "#7c3aed", "#059669", "#dc2626"];
+const COLORS = ["#6366f1", "#14b8a6", "#f97316", "#8b5cf6", "#10b981", "#ef4444"];
 
 type Role = "employee" | "manager" | "admin";
 
@@ -140,6 +140,12 @@ function App() {
             <p className="tagline">
               Digital goal setting, L1 approval, quarterly check-ins, audit trail, and HR analytics in one portal.
             </p>
+            <div className="feature-pills">
+              <span className="feature-pill">◎ Goal sheets</span>
+              <span className="feature-pill">✓ L1 approvals</span>
+              <span className="feature-pill">◐ Quarterly tracking</span>
+              <span className="feature-pill">▣ HR analytics</span>
+            </div>
           </div>
           <div className="user-card">
             <span className="user-card-label">Switch demo persona</span>
@@ -244,18 +250,21 @@ function EmployeePortal({ api, flash }: { api: ApiClient; flash: (text: string) 
 
   return (
     <section className="grid two content-section">
-      <div className="panel">
+      <div className="panel panel-accent-teal">
         <div className="panel-header-row">
-          <PanelTitle title="Employee Goal Sheet" subtitle="Draft, submit, and track your annual objectives" />
+          <PanelTitle icon="🎯" iconTone="teal" title="Employee Goal Sheet" subtitle="Draft, submit, and track your annual objectives" />
           <StatusBadge status={sheet.status} />
         </div>
         <div className="weight-bar" title="Total weightage must equal 100%">
           <div className={`weight-bar-fill ${weightClass}`} style={{ width: `${Math.min(sheet.total_weightage, 100)}%` }} />
         </div>
-        <p className="hint" style={{ marginTop: 8 }}>
-          Total weightage: <strong>{sheet.total_weightage}%</strong>
-          {sheet.total_weightage !== 100 && " (must be 100% to submit)"}
-        </p>
+        <div className="weight-label">
+          <span className="hint">Total weightage</span>
+          <strong>
+            {sheet.total_weightage}%
+            {sheet.total_weightage !== 100 && " · need 100% to submit"}
+          </strong>
+        </div>
         {sheet.returned_reason && <div className="warning">{sheet.returned_reason}</div>}
         {goals.map((goal, index) => (
           <div className="goal-card" key={goal.id || index}>
@@ -305,11 +314,9 @@ function EmployeePortal({ api, flash }: { api: ApiClient; flash: (text: string) 
         </div>
       </div>
 
-      <div className="panel">
-        <PanelTitle title="Quarterly Achievement" subtitle="Actuals are accepted after L1 approval" />
-        <select value={quarter} onChange={(event) => setQuarter(event.target.value)}>
-          {["Q1", "Q2", "Q3", "Q4"].map((item) => <option key={item}>{item}</option>)}
-        </select>
+      <div className="panel panel-accent-purple">
+        <PanelTitle icon="📊" iconTone="purple" title="Quarterly Achievement" subtitle="Actuals are accepted after L1 approval" />
+        <QuarterTabs value={quarter} onChange={setQuarter} />
         {sheet.goals.map((goal) => (
           <AchievementForm key={goal.id} goal={goal} disabled={sheet.status !== "approved"} onSave={updateAchievement} />
         ))}
@@ -397,8 +404,8 @@ function ManagerPortal({ api, flash }: { api: ApiClient; flash: (text: string) =
 
   return (
     <section className="grid two content-section">
-      <div className="panel">
-        <PanelTitle title="L1 Approval Queue" subtitle={`${approvals.length} submitted sheets awaiting action`} />
+      <div className="panel panel-accent-orange">
+        <PanelTitle icon="✅" iconTone="orange" title="L1 Approval Queue" subtitle={`${approvals.length} submitted sheets awaiting action`} />
         {approvals.map((sheet) => (
           <div className="goal-card" key={sheet.id}>
             <div className="panel-header-row">
@@ -413,17 +420,26 @@ function ManagerPortal({ api, flash }: { api: ApiClient; flash: (text: string) =
             </div>
           </div>
         ))}
-        {!approvals.length && <EmptyState text="No pending approvals. Use employee role to submit a sheet." />}
+        {!approvals.length && <EmptyState icon="📭" text="No pending approvals. Use employee role to submit a sheet." />}
       </div>
 
-      <div className="panel">
-        <PanelTitle title="Team Check-ins" subtitle="Planned vs actual progress for direct reports" />
+      <div className="panel panel-accent-teal">
+        <PanelTitle icon="👥" iconTone="teal" title="Team Check-ins" subtitle="Planned vs actual progress for direct reports" />
         <div className="cards">
           {team.map((sheet) => (
-            <button className="team-card" key={sheet.id} onClick={() => setSelected(sheet)}>
-              <strong>{sheet.employee.name}</strong>
-              <span>{sheet.status}</span>
-              <b>{sheet.weighted_score}%</b>
+            <button
+              className={`team-card${selected?.id === sheet.id ? " selected" : ""}`}
+              key={sheet.id}
+              onClick={() => setSelected(sheet)}
+            >
+              <div className="team-card-header">
+                <Avatar name={sheet.employee.name} />
+                <div>
+                  <strong>{sheet.employee.name}</strong>
+                  <span>{sheet.status}</span>
+                </div>
+              </div>
+              <span className="score-ring">{sheet.weighted_score}%</span>
             </button>
           ))}
         </div>
@@ -442,8 +458,8 @@ function ManagerPortal({ api, flash }: { api: ApiClient; flash: (text: string) =
         )}
       </div>
 
-      <div className="panel wide">
-        <PanelTitle title="Shared Department KPI" subtitle="Push one manager-owned KPI to all unlocked team goal sheets" />
+      <div className="panel wide panel-accent-purple">
+        <PanelTitle icon="🔗" iconTone="purple" title="Shared Department KPI" subtitle="Push one manager-owned KPI to all unlocked team goal sheets" />
         <div className="row">
           <input value={sharedGoal.title} onChange={(event) => setSharedGoal({ ...sharedGoal, title: event.target.value })} />
           <input type="number" value={sharedGoal.target_value} onChange={(event) => setSharedGoal({ ...sharedGoal, target_value: Number(event.target.value) })} />
@@ -519,40 +535,54 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
   return (
     <section className="grid two content-section">
       <div className="panel">
-        <PanelTitle title="HR Completion Dashboard" subtitle={`Active quarter: ${analytics.active_quarter}`} />
+        <PanelTitle icon="📈" iconTone="indigo" title="HR Completion Dashboard" subtitle={`Active quarter: ${analytics.active_quarter}`} />
         <div className="metrics">
-          <Metric label="Employees" value={analytics.employees} />
-          <Metric label="Approved" value={analytics.approved_sheets} />
-          <Metric label="Submitted" value={analytics.submitted_sheets} />
-          <Metric label="Check-ins" value={analytics.checkins_completed} />
+          <Metric icon="👤" variant="m1" label="Employees" value={analytics.employees} />
+          <Metric icon="✓" variant="m2" label="Approved" value={analytics.approved_sheets} />
+          <Metric icon="↑" variant="m3" label="Submitted" value={analytics.submitted_sheets} />
+          <Metric icon="💬" variant="m4" label="Check-ins" value={analytics.checkins_completed} />
         </div>
-        <div className="chart">
-          <ResponsiveContainer>
-            <PieChart>
-              <Pie data={analytics.goal_status_distribution} dataKey="value" nameKey="name">
-                {analytics.goal_status_distribution.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+        <div className="chart-wrap">
+          <p className="hint" style={{ marginBottom: 8 }}>Goal status distribution</p>
+          <div className="chart">
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={analytics.goal_status_distribution} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={3}>
+                  {analytics.goal_status_distribution.map((_, index) => (
+                    <Cell key={index} fill={COLORS[index % COLORS.length]} stroke="none" />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0" }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-        <button className="secondary" onClick={downloadCsv}>
+        <button className="accent" onClick={downloadCsv}>
           ↓ Download Achievement CSV
         </button>
       </div>
 
-      <div className="panel">
-        <PanelTitle title="Analytics Module" subtitle="Goal distribution and manager effectiveness" />
-        <div className="chart">
-          <ResponsiveContainer>
+      <div className="panel panel-accent-teal">
+        <PanelTitle icon="📊" iconTone="teal" title="Analytics Module" subtitle="Goal distribution and manager effectiveness" />
+        <div className="chart-wrap">
+          <p className="hint" style={{ marginBottom: 8 }}>Goals by thrust area</p>
+          <div className="chart">
+            <ResponsiveContainer>
             <BarChart data={analytics.thrust_area_distribution}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="name" hide />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#2563eb" />
+              <YAxis tick={{ fill: "#64748b", fontSize: 12 }} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0" }} />
+              <Bar dataKey="value" fill="url(#barGradient)" radius={[8, 8, 0, 0]} />
+              <defs>
+                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366f1" />
+                  <stop offset="100%" stopColor="#14b8a6" />
+                </linearGradient>
+              </defs>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
         {analytics.manager_completion.map((item) => (
           <div className="mini-row" key={item.manager}>
@@ -562,8 +592,8 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
         ))}
       </div>
 
-      <div className="panel wide">
-        <PanelTitle title="Exception Handling" subtitle="Admin can unlock approved goal sheets and preserve auditability" />
+      <div className="panel wide panel-accent-orange">
+        <PanelTitle icon="🔓" iconTone="orange" title="Exception Handling" subtitle="Admin can unlock approved goal sheets and preserve auditability" />
         {sheets.map((sheet) => (
           <div className="mini-row" key={sheet.id}>
             <span>{sheet.employee.name} - {sheet.status} - {sheet.total_weightage}%</span>
@@ -572,9 +602,15 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
         ))}
       </div>
 
-      <div className="panel wide">
-        <PanelTitle title="Audit Trail" subtitle="All locked-goal exceptions and workflow changes are tracked" />
+      <div className="panel wide panel-accent-purple">
+        <PanelTitle icon="📋" iconTone="purple" title="Audit Trail" subtitle="All locked-goal exceptions and workflow changes are tracked" />
         <div className="audit-table">
+          <div className="audit-table-header">
+            <span>Timestamp</span>
+            <span>Actor</span>
+            <span>Action</span>
+            <span>Entity</span>
+          </div>
           {audit.map((row) => (
             <div className="audit-row" key={row.id}>
               <span>{new Date(row.created_at).toLocaleString()}</span>
@@ -590,26 +626,77 @@ function AdminPortal({ api, flash, users }: { api: ApiClient; flash: (text: stri
   );
 }
 
-function PanelTitle({ title, subtitle }: { title: string; subtitle: string }) {
+function PanelTitle({
+  title,
+  subtitle,
+  icon,
+  iconTone = "indigo",
+}: {
+  title: string;
+  subtitle: string;
+  icon?: string;
+  iconTone?: "indigo" | "teal" | "orange" | "purple";
+}) {
   return (
     <div className="panel-title">
-      <h2>{title}</h2>
-      <p>{subtitle}</p>
+      {icon && <span className={`panel-icon ${iconTone}`}>{icon}</span>}
+      <div className="panel-title-text">
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </div>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({
+  label,
+  value,
+  icon,
+  variant = "m1",
+}: {
+  label: string;
+  value: number;
+  icon?: string;
+  variant?: "m1" | "m2" | "m3" | "m4";
+}) {
   return (
-    <div className="metric">
+    <div className={`metric ${variant}`}>
+      {icon && <span className="metric-icon">{icon}</span>}
       <strong>{value}</strong>
       <span>{label}</span>
     </div>
   );
 }
 
-function EmptyState({ text }: { text: string }) {
-  return <div className="empty">{text}</div>;
+function EmptyState({ text, icon = "📋" }: { text: string; icon?: string }) {
+  return (
+    <div className="empty">
+      <span className="empty-icon">{icon}</span>
+      {text}
+    </div>
+  );
+}
+
+function QuarterTabs({ value, onChange }: { value: string; onChange: (q: string) => void }) {
+  return (
+    <div className="quarter-tabs">
+      {["Q1", "Q2", "Q3", "Q4"].map((item) => (
+        <button key={item} type="button" className={`quarter-tab${value === item ? " active" : ""}`} onClick={() => onChange(item)}>
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Avatar({ name }: { name: string }) {
+  const initials = name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return <span className="avatar">{initials}</span>;
 }
 
 function LoadingState({ label }: { label: string }) {
