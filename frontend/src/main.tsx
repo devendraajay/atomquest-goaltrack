@@ -708,11 +708,13 @@ function QuarterTabs({ value, onChange }: { value: string; onChange: (q: string)
 
 function Avatar({ name }: { name: string }) {
   const initials = name
-    .split(" ")
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part.length > 0)
     .map((part) => part[0])
     .join("")
     .slice(0, 2)
-    .toUpperCase();
+    .toUpperCase() || "?";
   return <span className="avatar">{initials}</span>;
 }
 
